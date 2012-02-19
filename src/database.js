@@ -75,7 +75,7 @@ jDal.DB = {
 			
 			//iterate through each column
 			for(col in table['columns']) {
-			    if(table.hasOwnProperty(col)) {
+			    if(table['columns'].hasOwnProperty(col)) {
 				//store column definition
 				var column = table['columns'][col] || { unique: false };
 				
