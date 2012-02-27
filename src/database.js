@@ -31,13 +31,14 @@
  *	...
  *  }
  */
-
+jDal = {};
 jDal.DB = {
     db: window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB || window.openDatabase,
     version: 3,
     size: 100000,
     types: {IndexedDB: 'IDB', WebSQL: 'WSQL'},
     open: function(dbName, schema) {
+	var db = jDal.DB.db;
 	//No DB support
 	if(!db) return false;
 	
@@ -50,22 +51,22 @@ jDal.DB = {
     },
     _handle: function(request, type, schema) {
 	//privates
-	var me = this,
-	    db;
+	this.db = null;
+	console.log(request);
 	    
-	me.schema = schema;
+	this.schema = schema;
 
 	//setup DB handle (parse request)
 	if(type == jDal.DB.types.IndexedDB) {
-	    request.onerror = function(e) {
-		console.log("WHOOPS!", e, request.errorCode);
-	    };
+	    request.onerror = jDal.DB._onError;
 	    request.onsuccess = function(e) {
+		console.log(this);
 		console.log("Done!", e, request.result);
 		db = request.result;
-		db.onerror = me.onError;
+		db.onerror = jDal.DB._onError;
 	    }
 	    request.onupgradeneeded = function(e) {
+		console.log(this);
 		// iterate through each table in schema
 		for(tbl in schema) {
 		    if(schema.hasOwnProperty(tbl)) {
@@ -94,14 +95,12 @@ jDal.DB = {
 	    //setup schema
 	}
 
-	me.onError = function(e) {
+	this.select = {};
+	this.insert = {};
+	this.query = {};
+	
+	function _onError(e) {
 	    console.error("Database error: " + e.target.errorCode);
 	}
-
-	return {
-	    select: {},
-	    insert: {},
-	    query: {}
-	};
     }
 };

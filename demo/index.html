@@ -1,0 +1,25 @@
+
+<!DOCTYPE html>
+<html>
+    <head>
+	<title></title>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	
+	<script src="../src/database.js"></script>
+	<script>
+	    function load() {
+		var db = jDal.DB.open('test_db', { 
+		    testTable: {
+			key: 'id',
+			columns: {
+			    id: { unique: true },
+			    name: { unique: false }
+			}
+		    }
+		});
+	    }
+	</script>
+    </head>
+    <body onload="load()">
+    </body>
+</html>
