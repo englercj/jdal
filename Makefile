@@ -6,6 +6,7 @@ PREFIX = .
 DIST_DIR = ${PREFIX}/dist
 
 BASE_FILES = ${SRC_DIR}/util.js\
+	${SRC_DIR}/database.js\
         ${SRC_DIR}/query.js
 
 MODULES = ${SRC_DIR}/intro.js\
