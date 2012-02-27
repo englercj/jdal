@@ -5,21 +5,38 @@
 	<title></title>
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 	
+	
+	<script src="../src/jdal.js"></script>
 	<script src="../src/database.js"></script>
 	<script>
-	    function load() {
-		var db = jDal.DB.open('test_db', { 
-		    testTable: {
-			key: 'id',
-			columns: {
-			    id: { unique: true },
-			    name: { unique: false }
-			}
+	    var db = jDal.DB.open('tester_db21', { 
+		testTable: {
+		    key: 'id',
+		    columns: {
+			id: { unique: true },
+			name: { unique: false }
 		    }
+		}
+	    }, function() {
+		this.select('testTable', ['id', 1], function(result) {
+		    if(!result) {
+			insertData(function() {
+			    this.select('testTable', ['id', 1], function(res) { console.log('inserted', res); });
+			});
+		    } else
+			console.log('no need to insert', result);
 		});
+	    });
+	    
+	    function insertData(cb) {
+		var rows = [];
+		for(var i = 0; i < 10; ++i) {
+		    rows.push({ id: i, name: 'chad'+i });
+		}
+		db.insert('testTable', rows, cb);
 	    }
 	</script>
     </head>
-    <body onload="load()">
+    <body>
     </body>
 </html>
