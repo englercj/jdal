@@ -17,12 +17,12 @@
  *  - Handle Upgrade cases (specified version is greater than on disk version)
  *  - Handle WebSQL users
  *  - Optimize for selecting on indexedDB keypath (i.e. use .get() instead of .index())
+ *  - Select filter uses OR logic now, needs to have AND logic as well
  *  
  * NOTE:
  *  - Schemas are passed as object of the form:
  *  {
  *	tableName: {
- *	    key: 'columnName',
  *	    columns: {
  *		columnName: { unique: true/false }, //if {} not specific defaults to { unique: false }
  *		columnName: { unique: true/false },
@@ -32,6 +32,7 @@
  *	},
  *	...
  *  }
+ *  - Open callback prototype: function(db) {}
  */
 
 jDal.DB = {
@@ -52,6 +53,9 @@ jDal.DB = {
 	    return new jDal.DB._handle(db(dbName, jDal.DB.version, dbName, jDal.DB.size), jDal.DB.types.WebSQL, schema);
     },
     _handle: function(request, type, schema, openedCallback) {
+	//////////////////////////////////////
+	// HANDLE INITIALIZATION
+	//////////////////////////////////////
 	//privates
 	this.db = null;
 	this.type = type;
@@ -68,16 +72,16 @@ jDal.DB = {
 		if(this.db.version != jDal.DB.version) {
 		    var setupReq = this.db.setVersion(jDal.DB.version);
 		    setupReq.onsuccess = jDal._bind(this, function(req, e) {
-			createStructure.call(this, req, e);
-			openedCallback.call(this);
+			_createStructure.call(this, req, e);
+			openedCallback.call(this, this);
 		    });
 		} else {
 		    //call user callback
-		    openedCallback.call(this);
+		    openedCallback.call(this, this);
 		}
 		
 	    });
-	    request.onupgradeneeded = jDal._bind(this, createStructure);
+	    request.onupgradeneeded = jDal._bind(this, _createStructure);
 	}
 	else {
 	    //get handle
@@ -86,23 +90,51 @@ jDal.DB = {
 	    //setup schema
 	}
 
+	//////////////////////////////////////
+	// PUBLIC API
+	//////////////////////////////////////
+	//table    -> table to select from
+	//filter   -> key value pair to filter by (in { col: val1, ... } format)
+	//callback ->callback to execute when finished
 	this.select = function(table, filter, callback) {
 	    if(this.db === null) {
 		throw new Error('DB not yet opened.');
 	    }
 	    
+	    //if they skip a filter
+	    if(typeof(filter) == 'function') {
+		callback = filter;
+		filter = null;
+	    }
+	    
 	    if(this.type == jDal.DB.types.IndexedDB) {
 		var objStore = this.db.transaction([table]).objectStore(table),
-		    index = objStore.index(filter[0]);
-		    
-		index.get(filter[1]).onsuccess = jDal._bind(this, function(req, e) {
-		    callback.call(this, req.result);  
-		});
+		    results = [],
+		    selectCursor = function(req, e) {
+			var cursor = req.result;
+			if(cursor) {
+			    results.push(cursor.value);
+			    cursor.continue();
+			} else {
+			    callback.call(this, results);
+			}
+		    };
+		
+		if(filter === null) {
+		    objStore.openCursor().onsuccess = jDal._bind(this, selectCursor);
+		} else {
+		    for(var col in filter) {
+			objStore.index(col).openCursor(IDBKeyRange.only(filter[col])).onsuccess = jDal._bind(this, selectCursor);
+		    }
+		}
 		
 		return this;
 	    } else {}
 	};
 	
+	//table    -> table to insert into
+	//data     -> array of objects to store (in { col: value, ... } format)
+	//callback -> callback to execute when finished
 	this.insert = function(table, data, callback) {
 	    if(this.db === null) {
 		throw new Error('DB not yet opened.');
@@ -115,24 +147,57 @@ jDal.DB = {
 		    callback.call(this);
 		});
 		
-		/*trans.onerror = jDal._bind(this, function(req, e) {
-		    console.log('Error', req, e);
-		});*/
-		
 		var objStore = trans.objectStore(table);
 		for (var i in data) {
-		    objStore.add(data[i]);
-		    //var reqst = objStore.add(data[i]);
-		    /*reqst.onsuccess = jDal._bind(this, function(req, e) {
-			console.log(this, req, e);
-		    });*/
+		    if(data.hasOwnProperty(i)) {
+			data[i]._id = jDal._generateGuid();
+			
+			var reqst = objStore.add(data[i]);
+			
+			reqst.onerror = jDal._bind(this, function(req, e) {
+			    //guid collision, shouldnt happen but if it does, try again
+			    if(e.target.errorCode === 4) {
+				data[i]._id = jDal._generateGuid();
+				objStore.add(data[i]);
+			    }
+			});
+		    }
 		}
 		
 		return this;
 	    } else {}
 	};
 	
-	function createStructure(req, e) {
+	//table    -> table to delete from
+	//filter   -> key value pair to filter by (in { col: val1, ... } format)
+	//callback -> callback to execute when finished
+	this.drop = function(table, filter, callback) {
+	    if(this.db === null) {
+		throw new Error('DB not yet opened.');
+	    }
+	    
+	    if(this.type == jDal.DB.types.IndexedDB) {
+		var trans = this.db.transaction([table], IDBTransaction.READ_WRITE);
+		
+		trans.oncomplete = jDal._bind(this, function(e) {
+		    callback.call(this, e);
+		});
+		
+		testDb.select('testTable', filter, function(results) {
+		    $.each(results, function(i, val) {
+			trans.objectStore(table).delete(val._id);
+		    });
+		});
+	    } else {}
+	}
+	
+	this.isReady = function() {return (this.db !== null);}
+	
+	//////////////////////////////////////
+	// PRIVATE UTILITIES
+	//////////////////////////////////////
+	//initializes structure of the database
+	function _createStructure(req, e) {
 	    //console.log(this, req, e);
 	    // iterate through each table in schema
 	    for(var tbl in this.schema) {
@@ -143,7 +208,7 @@ jDal.DB = {
 		    
 		    //store table obj, create object store
 		    var table = this.schema[tbl],
-			objStore = this.db.createObjectStore(tbl, { keyPath: table['key'] });
+			objStore = this.db.createObjectStore(tbl, { keyPath: '_id' });
 
 		    //iterate through each column
 		    for(var col in table['columns']) {
@@ -159,8 +224,8 @@ jDal.DB = {
 	    }
 	}
 	
+	//global error callback
 	function _onError(e) {
-	    console.log(e);
 	    console.error("Database error: " + e.target.errorCode);
 	}
     }

@@ -5,38 +5,130 @@
 	<title></title>
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 	
-	
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js"></script>
+	<script src="http://www.svendtofte.com/code/usefull_prototypes/prototypes.js"></script> <!-- For .compareArrays -->
 	<script src="../src/util.js"></script>
 	<script src="../src/database.js"></script>
 	<script>
-	    var db = jDal.DB.open('tester_db21', { 
+	    var testDb = jDal.DB.open('tester_db72', { 
 		testTable: {
-		    key: 'id',
 		    columns: {
-			id: { unique: true },
 			name: { unique: false }
 		    }
 		}
-	    }, function() {
-		this.select('testTable', ['id', 1], function(result) {
-		    if(!result) {
-			insertData(function() {
-			    this.select('testTable', ['id', 1], function(res) { console.log('inserted', res); });
+	    }, function(db) {
+		//update people list when db is ready
+		$('#btnRefreshDB').click();
+		
+		//insert sample data if empty
+		db.select('testTable', function(results) {
+		    if(!results.length) {
+			//insert some data
+			var rows = [];
+			rows.push({ name: 'chad' });
+			rows.push({ name: 'john' });
+			rows.push({ name: 'jacob' });
+			rows.push({ name: 'jingle' });
+			rows.push({ name: 'heimer' });
+			rows.push({ name: 'schmidt' });
+			
+			db.insert('testTable', rows, function() {
+			    console.log('inserted sample data'); 
 			});
-		    } else
-			console.log('no need to insert', result);
+		    }
 		});
 	    });
 	    
-	    function insertData(cb) {
-		var rows = [];
-		for(var i = 0; i < 10; ++i) {
-		    rows.push({ id: i, name: 'chad'+i });
-		}
-		db.insert('testTable', rows, cb);
-	    }
+	    $(function() {
+		$('#btnRefreshDB').on('click', function() {
+		    if(!testDb.isReady()) return;
+		
+		    testDb.select('testTable', function(results) {
+			var $sel = $('#selCurrentDB').empty();
+
+			$.each(results, function(i, val) {
+			    $sel.append(
+				$('<option/>').attr('value', val._id).text(val.name).data('record', val)
+			    );
+			});
+		    });
+		});
+		
+		$('#btnNewPerson').on('click', function() {
+		    if(!testDb.isReady()) return;
+
+		    var name = $('#txtNewPerson').val();
+
+		    testDb.insert('testTable', [{ name: name }], function() {
+			$('#spanStatus').text(name + ' has been inserted.');
+			$('#txtNewPerson').val('');
+		    });
+		});
+
+		$('#btnDeletePerson').on('click', function() {
+		    if(!testDb.isReady()) return;
+
+		    var name = $('#txtDeletePerson').val();
+		    
+		    testDb.drop('testTable', { name: name }, function() {
+			$('#spanStatus').text(name + ' has been deleted');
+			$('#txtDeletePerson').val('');
+		    });
+		});
+
+		$('#btnDeleteAll').on('click', function() {
+		    if(!testDb.isReady()) return;
+
+		    testDb.select('testTable', function(results) {
+			var keys = [];
+			$.each(results, function(i, val) {
+			    keys.push(val.id);
+			});
+			testDb.drop('testTable', keys, function() {
+			    $('#spanStatus').text('All records have been deleted');
+			});
+		    });
+		});
+		
+		$('#selCurrentDB').on('change', function() {
+		    $('option:selected', this).each(function() {
+			var obj = $(this).data('record');
+			$('#spanStatus').text('Record: ' + JSON.stringify(obj));
+		    });
+		});
+	    });
 	</script>
+	
+	<style>
+	    #selCurrentDB {
+		height:200px;
+		width:200px;
+	    }
+	    
+	    #spanStatus {
+		font-family: "Courier New", Courier, monospace;
+	    }
+	</style>
     </head>
     <body>
+	<h3>Add Person To DB (<u>C</u>RUD)</h1>
+	<input id="txtNewPerson" type="text" placeholder="name" />
+	<button id="btnNewPerson">Add Person</button>
+	<br/>
+	
+	<h3>Current People In DB (C<u>R</u>UD)</h1>
+	<select id="selCurrentDB" multiple></select>
+	<button id="btnRefreshDB">Refresh</button>
+	<br/>	
+	
+	<h3>Delete People From DB (CRU<u>D</u>)</h1>
+	<input id="txtDeletePerson" type="text" placeholder="name" />
+	<button id="btnDeletePerson">Delete Person</button>
+	<br/>
+	<button id="btnDeleteAll">Delete ALL</button>
+	
+	<br/><br/><br/>
+	
+	<span id="spanStatus"></span>
     </body>
 </html>
