@@ -160,6 +160,7 @@ jDal.DB = {
 				data[i]._id = jDal._generateGuid();
 				objStore.add(data[i]);
 			    }
+                            e.stopPropogation();
 			});
 		    }
 		}
@@ -198,7 +199,6 @@ jDal.DB = {
 	//////////////////////////////////////
 	//initializes structure of the database
 	function _createStructure(req, e) {
-	    //console.log(this, req, e);
 	    // iterate through each table in schema
 	    for(var tbl in this.schema) {
 		if(this.schema.hasOwnProperty(tbl)) {
@@ -226,7 +226,8 @@ jDal.DB = {
 	
 	//global error callback
 	function _onError(e) {
-	    console.error("Database error: " + e.target.errorCode);
+            if(window.console && console.error)
+                console.error("[JDAL] Database error code: " + e.target.errorCode);
 	}
     }
 };
