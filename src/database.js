@@ -16,8 +16,9 @@
  * TODO:
  *  - Handle Upgrade cases (specified version is greater than on disk version)
  *  - Handle WebSQL users
- *  - Optimize for selecting on indexedDB keypath (i.e. use .get() instead of .index())
  *  - Select filter uses OR logic now, needs to have AND logic as well
+ *  - Check if callbacks are defined
+ *  - Call callbacks with error code instead of throwing exceptions
  *  
  * NOTE:
  *  - Schemas are passed as object of the form:
@@ -37,7 +38,7 @@
 
 jDal.DB = {
     db: window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB || window.openDatabase,
-    version: 4,
+    version: 1,
     size: 100000,
     types: {IndexedDB: 'IDB', WebSQL: 'WSQL'},
     open: function(dbName, schema, callback) {
