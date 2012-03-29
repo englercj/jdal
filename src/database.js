@@ -14,20 +14,20 @@
  *	- Android Browser 2.1+
  *	
  * TODO:
- *  - Handle Upgrade cases (specified version is greater than on disk version)
  *  - Handle WebSQL users
  *  - Select filter uses OR logic now, needs to have AND logic as well
  *  - Check if callbacks are defined
  *  - Call callbacks with error code instead of throwing exceptions
+ *  - Handle Upgrade cases (specified version is greater than on disk version)
  *  
  * NOTE:
  *  - Schemas are passed as object of the form:
  *  {
  *	tableName: {
  *	    columns: {
- *		columnName: { unique: true/false }, //if {} not specific defaults to { unique: false }
- *		columnName: { unique: true/false },
- *		columnName: { unique: true/false },
+ *		columnName: { unique: true/false, index: true/false }, //if {} not specific defaults to { unique: false }
+ *		columnName: { unique: true/false, index: true/false },
+ *		columnName: { unique: true/false, index: true/false },
  *		...
  *	    }
  *	},
@@ -43,8 +43,14 @@ jDal.DB = {
     types: {IndexedDB: 'IDB', WebSQL: 'WSQL'},
     open: function(dbName, schema, callback) {
 	var db = jDal.DB.db;
-	//No DB support
-	if(!db) return false;
+	
+        //No DB support
+	if(!db) {
+            if(window.console && console.warn)
+                console.warn('jDal is not supported in this browser.');
+            
+            return false;
+        }
 	
 	//Otherwise this is a Indexed DB
 	if(typeof(db) == 'object')
@@ -61,6 +67,7 @@ jDal.DB = {
 	this.db = null;
 	this.type = type;
 	this.schema = schema;
+        this.defaultColumn = { unique: false, index: false };
 
 	//setup DB handle (parse request)
 	if(type == jDal.DB.types.IndexedDB) {
@@ -215,10 +222,10 @@ jDal.DB = {
 		    for(var col in table['columns']) {
 			if(table['columns'].hasOwnProperty(col)) {
 			    //store column definition
-			    var column = table['columns'][col] || { unique: false };
-
-			    //create index for this column (in case they select by it)
-			    objStore.createIndex(col, col, column);
+			    var column = jDal.extend(true, {}, this.defaultColumn, table['columns'][col]);
+                            
+                            if(column.index)
+                                objStore.createIndex(col, col, column);
 			}
 		    }
 		}
@@ -232,5 +239,3 @@ jDal.DB = {
 	}
     }
 };
-
-jDal.DB._handle.prototype.constructor = jDal.DB._handle;
