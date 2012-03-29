@@ -87,5 +87,5 @@ window.jDal = {
 
         // Return the modified object
         return target;
-    };
+    }
 };

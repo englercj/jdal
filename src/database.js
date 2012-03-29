@@ -25,9 +25,11 @@
  *  {
  *	tableName: {
  *	    columns: {
- *		columnName: { unique: true/false, index: true/false }, //if {} not specific defaults to { unique: false }
- *		columnName: { unique: true/false, index: true/false },
- *		columnName: { unique: true/false, index: true/false },
+ *              //if {} not specific defaults to { false, false, false, 'TEXT' }
+ *              //type and required only matter on WebSQL databases
+ *		columnName: { unique: true/false, index: true/false, required: true/false, type: 'SQL_TYPE' },
+ *		columnName: { unique: true/false, index: true/false, required: true/false, type: 'SQL_TYPE' },
+ *		columnName: { unique: true/false, index: true/false, required: true/false, type: 'SQL_TYPE' },
  *		...
  *	    }
  *	},
@@ -57,7 +59,7 @@ jDal.DB = {
 	    return new jDal.DB._handle(db.open(dbName, jDal.DB.version), jDal.DB.types.IndexedDB, schema, callback);
 	//If we are using WebSQL Database Type
 	else
-	    return new jDal.DB._handle(db(dbName, jDal.DB.version, dbName, jDal.DB.size), jDal.DB.types.WebSQL, schema);
+	    return new jDal.DB._handle(db(dbName, jDal.DB.version, dbName, jDal.DB.size), jDal.DB.types.WebSQL, schema, callback);
     },
     _handle: function(request, type, schema, openedCallback) {
 	//////////////////////////////////////
@@ -67,7 +69,7 @@ jDal.DB = {
 	this.db = null;
 	this.type = type;
 	this.schema = schema;
-        this.defaultColumn = { unique: false, index: false };
+        this.defaultColumn = { unique: false, index: false, required: false, type: 'TEXT' };
 
 	//setup DB handle (parse request)
 	if(type == jDal.DB.types.IndexedDB) {
@@ -93,9 +95,10 @@ jDal.DB = {
 	}
 	else {
 	    //get handle
-	    db = request;
+	    this.db = request;
 	    
 	    //setup schema
+            _createStructure.call(this);
 	}
 
 	//////////////////////////////////////
@@ -207,27 +210,47 @@ jDal.DB = {
 	//////////////////////////////////////
 	//initializes structure of the database
 	function _createStructure(req, e) {
+            var sql;
+            
 	    // iterate through each table in schema
 	    for(var tbl in this.schema) {
 		if(this.schema.hasOwnProperty(tbl)) {
-		    //if already created, move on
-		    if(this.db.objectStoreNames.contains(tbl))
-			continue;
-		    
-		    //store table obj, create object store
-		    var table = this.schema[tbl],
-			objStore = this.db.createObjectStore(tbl, { keyPath: '_id' });
+                    if(this.type == jDal.DB.types.IndexedDB) {
+                        //if already created, move on
+                        if(this.db.objectStoreNames.contains(tbl))
+                            continue;
 
-		    //iterate through each column
-		    for(var col in table['columns']) {
-			if(table['columns'].hasOwnProperty(col)) {
-			    //store column definition
-			    var column = jDal.extend(true, {}, this.defaultColumn, table['columns'][col]);
+                        //store table obj, create object store
+                        var table = this.schema[tbl],
+                            objStore = this.db.createObjectStore(tbl, { keyPath: '_id' });
+
+                        //iterate through each column
+                        for(var col in table['columns']) {
+                            if(table['columns'].hasOwnProperty(col)) {
+                                //store column definition
+                                var column = jDal.extend(true, {}, this.defaultColumn, table['columns'][col]);
+
+                                if(column.index)
+                                    objStore.createIndex(col, col, column);
+                            }
+                        }
+                    } else {
+                        var table = this.schema[tbl],
+                            sql = 'CREATE TABLE IF NOT EXISTS ' + tbl + '(_id INTEGER NOT NULL PRIMARY KEY AUTO INCREMENT, ';
                             
-                            if(column.index)
-                                objStore.createIndex(col, col, column);
-			}
-		    }
+                        //iterate through each column
+                        for(var col in table['columns']) {
+                                //store column definition
+                                var column = jDal.extend(true, {}, this.defaultColumn, table['columns'][col]);
+                                
+                                sql += col + ' ' + column.type + ' ' + (column.required ? 'NOT NULL ' : '') + 
+                                    (column.index ? 'INDEX ' : '') + (column.unique ? 'UNIQUE ' : '') + ');';
+                                
+                                this.db.transaction(function(trans) {
+                                    trans.executeSql(sql, [], function() { console.log('Win-Rar!'); }, _onError);
+                                });
+                        }
+                    }
 		}
 	    }
 	}
