@@ -7,9 +7,9 @@
  *	- Chrome 11+
  *  - Web SQL (fallback):
  *	- Chrome 4+
- *	- Safari 3.1+
+ *	- Safari 4+
  *	- Opera 10.5+
- *	- iOS Safari 3.2+
+ *	- iOS Safari 4+
  *	- Opera Mobile 11+
  *	- Android Browser 2.1+
  *	
@@ -69,7 +69,7 @@ jDal.DB = {
 	this.db = null;
 	this.type = type;
 	this.schema = schema;
-        this.defaultColumn = { unique: false, index: false, required: false, type: 'TEXT' };
+        this.defaultColumn = {unique: false, index: false, required: false, type: 'TEXT'};
 
 	//setup DB handle (parse request)
 	if(type == jDal.DB.types.IndexedDB) {
@@ -135,16 +135,36 @@ jDal.DB = {
 		    objStore.openCursor().onsuccess = jDal._bind(this, selectCursor);
 		} else {
 		    for(var col in filter) {
-			objStore.index(col).openCursor(IDBKeyRange.only(filter[col])).onsuccess = jDal._bind(this, selectCursor);
+			if(filter.hasOwnProperty(col)) {
+			    objStore.index(col).openCursor(IDBKeyRange.only(filter[col])).onsuccess = jDal._bind(this, selectCursor);
+			}
 		    }
 		}
+	    } else {
+		var sql = 'SELECT * FROM ' + table;
 		
-		return this;
-	    } else {}
+		if(filter) {
+		    sql += ' WHERE ';
+		    for(var col in filter) {
+			if(filter.hasOwnProperty(col)) {
+			    sql += col + '=' + filter[col] + ' OR ';
+			}
+		    }
+		    sql = sql.replace(/ OR $/, '');
+		}
+		
+		sql += ';';
+		
+		this.db.transaction(function(trans) {
+		    trans.executeSql(sql, [], jDal._bind(this, callback, 1), _onError);
+		});
+	    }
+	    
+	    return this;
 	};
 	
 	//table    -> table to insert into
-	//data     -> array of objects to store (in { col: value, ... } format)
+	//data     -> array of objects to store (in [{ col: value, ... }] format)
 	//callback -> callback to execute when finished
 	this.insert = function(table, data, callback) {
 	    if(this.db === null) {
@@ -175,9 +195,30 @@ jDal.DB = {
 			});
 		    }
 		}
+	    } else {
+		var sql = 'INSERT INTO ' + table,
+		    cols = [],
+		    vals = [];
 		
-		return this;
-	    } else {}
+		for(var i in data) {
+		    if(data.hasOwnProperty(i)) {
+			for(var col in data[i]) {
+			    if(data[i].hasOwnProperty(col)) {
+				cols.push(col);
+				vals.push(data[i][col]);
+			    }
+			}
+		    }
+		}
+		
+		sql += '(' + cols.join(', ') + ') VALUES (' + vals.join(', ');
+		
+		this.db.transaction(function(trans) {
+		    trans.executeSql(sql, [], jDal._bind(this, callback), _onError);
+		});
+	    }
+	    
+	    return this;
 	};
 	
 	//table    -> table to delete from
@@ -188,6 +229,12 @@ jDal.DB = {
 		throw new Error('DB not yet opened.');
 	    }
 	    
+	    //if they skip a filter
+	    if(typeof(filter) == 'function') {
+		callback = filter;
+		filter = null;
+	    }
+	    
 	    if(this.type == jDal.DB.types.IndexedDB) {
 		var trans = this.db.transaction([table], IDBTransaction.READ_WRITE);
 		
@@ -196,11 +243,29 @@ jDal.DB = {
 		});
 		
 		testDb.select('testTable', filter, function(results) {
-		    $.each(results, function(i, val) {
-			trans.objectStore(table).delete(val._id);
-		    });
+		    for(var i in results) {
+			trans.objectStore(table).delete(results[i]._id);
+		    }
 		});
-	    } else {}
+	    } else {
+		var sql = 'DELETE FROM ' + table,
+		    cols = [],
+		    vals = [];
+		
+		if(filter) {
+		    sql += ' WHERE ';
+		    for(var col in filter) {
+			if(filter.hasOwnProperty(col)) {
+			    sql += col + '=' + filter[col] + ' OR ';
+			}
+		    }
+		    sql = sql.replace(/ OR $/, '');
+		}
+		
+		sql += ';';
+	    }
+	    
+	    return this;
 	}
 	
 	this.isReady = function() {return (this.db !== null);}
@@ -221,7 +286,7 @@ jDal.DB = {
                             continue;
 
                         //store table obj, create object store
-                        var objStore = this.db.createObjectStore(tbl, { keyPath: '_id' });
+                        var objStore = this.db.createObjectStore(tbl, {keyPath: '_id'});
 
                         //iterate through each column
                         for(var col in table['columns']) {
@@ -245,7 +310,7 @@ jDal.DB = {
                                     (column.index ? 'INDEX ' : '') + (column.unique ? 'UNIQUE ' : '') + ');';
                                 
                                 this.db.transaction(function(trans) {
-                                    trans.executeSql(sql, [], function() { console.log('Win-Rar!'); }, _onError);
+                                    trans.executeSql(sql, [], function() {console.log('Win-Rar!');}, _onError);
                                 });
                         }
                     }

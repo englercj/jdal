@@ -1,9 +1,11 @@
 window.jDal = {
     //allows us to keep our 'this' reference
-    _bind: function(scope, fn) {
+    _bind: function(scope, fn, remove) {
 	return function() {
-	    var args = Array.prototype.slice.call(arguments);
-	    args.splice(0, 0, this);
+	    var args = Array.prototype.slice.call(arguments),
+		remove = (remove ? remove: 0);
+		
+	    args.splice(0, remove, this);
 	    fn.apply(scope, args); 
 	};
     },
