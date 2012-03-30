@@ -210,19 +210,18 @@ jDal.DB = {
 	//////////////////////////////////////
 	//initializes structure of the database
 	function _createStructure(req, e) {
-            var sql;
-            
 	    // iterate through each table in schema
 	    for(var tbl in this.schema) {
 		if(this.schema.hasOwnProperty(tbl)) {
+		    var table = this.schema[tbl];
+		    
                     if(this.type == jDal.DB.types.IndexedDB) {
                         //if already created, move on
                         if(this.db.objectStoreNames.contains(tbl))
                             continue;
 
                         //store table obj, create object store
-                        var table = this.schema[tbl],
-                            objStore = this.db.createObjectStore(tbl, { keyPath: '_id' });
+                        var objStore = this.db.createObjectStore(tbl, { keyPath: '_id' });
 
                         //iterate through each column
                         for(var col in table['columns']) {
@@ -235,8 +234,7 @@ jDal.DB = {
                             }
                         }
                     } else {
-                        var table = this.schema[tbl],
-                            sql = 'CREATE TABLE IF NOT EXISTS ' + tbl + '(_id INTEGER NOT NULL PRIMARY KEY AUTO INCREMENT, ';
+                        var sql = 'CREATE TABLE IF NOT EXISTS ' + tbl + '(_id INTEGER NOT NULL PRIMARY KEY AUTO INCREMENT, ';
                             
                         //iterate through each column
                         for(var col in table['columns']) {
