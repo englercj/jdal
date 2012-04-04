@@ -14,7 +14,6 @@
  *	- Android Browser 2.1+
  *	
  * TODO:
- *  - Handle WebSQL users
  *  - Select filter uses OR logic now, needs to have AND logic as well
  *  - Check if callbacks are defined
  *  - Call callbacks with error code instead of throwing exceptions
