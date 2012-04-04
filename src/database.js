@@ -42,24 +42,26 @@ jDal.DB = {
     db: window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB || window.openDatabase,
     version: 1,
     size: 100000,
-    types: {IndexedDB: 'IDB', WebSQL: 'WSQL'},
+    types: {
+	IndexedDB: 'IDB', 
+	WebSQL: 'WSQL'
+    },
     open: function(dbName, schema, callback) {
 	var db = jDal.DB.db;
 	
-        //No DB support
+	//No DB support
 	if(!db) {
-            if(window.console && console.warn)
-                console.warn('jDal is not supported in this browser.');
-            
-            return false;
-        }
+	    return false;
+	}
 	
 	//Otherwise this is a Indexed DB
-	if(typeof(db) == 'object')
+	if(typeof(db) == 'object') {
 	    return new jDal.DB._handle(db.open(dbName, jDal.DB.version), jDal.DB.types.IndexedDB, schema, callback);
+	}
 	//If we are using WebSQL Database Type
-	else
+	else {
 	    return new jDal.DB._handle(db(dbName, jDal.DB.version, dbName, jDal.DB.size), jDal.DB.types.WebSQL, schema, callback);
+	}
     },
     _handle: function(request, type, schema, openedCallback) {
 	//////////////////////////////////////
@@ -69,7 +71,12 @@ jDal.DB = {
 	this.db = null;
 	this.type = type;
 	this.schema = schema;
-        this.defaultColumn = {unique: false, index: false, required: false, type: 'TEXT'};
+	this.defaultColumn = {
+	    unique: false, 
+	    index: false, 
+	    required: false, 
+	    type: 'TEXT'
+	};
 
 	//setup DB handle (parse request)
 	if(type == jDal.DB.types.IndexedDB) {
@@ -98,7 +105,7 @@ jDal.DB = {
 	    this.db = request;
 	    
 	    //setup schema
-            _createStructure.call(this);
+	    _createStructure.call(this);
 	}
 
 	//////////////////////////////////////
@@ -120,23 +127,30 @@ jDal.DB = {
 	    
 	    if(this.type == jDal.DB.types.IndexedDB) {
 		var objStore = this.db.transaction([table]).objectStore(table),
-		    results = [],
-		    selectCursor = function(req, e) {
-			var cursor = req.result;
-			if(cursor) {
-			    results.push(cursor.value);
-			    cursor.continue();
-			} else {
-			    callback.call(this, results);
-			}
-		    };
+		results = [],
+		selectCursor = function(req, e) {
+		    var cursor = req.result;
+		    if(cursor) {
+			results.push(cursor.value);
+			cursor['continue']();
+		    } else {
+			callback.call(this, results);
+		    }
+		};
 		
 		if(filter === null) {
 		    objStore.openCursor().onsuccess = jDal._bind(this, selectCursor);
 		} else {
 		    for(var col in filter) {
 			if(filter.hasOwnProperty(col)) {
-			    objStore.index(col).openCursor(IDBKeyRange.only(filter[col])).onsuccess = jDal._bind(this, selectCursor);
+			    try {
+				objStore.index(col).openCursor(IDBKeyRange.only(filter[col])).onsuccess = jDal._bind(this, selectCursor);
+			    } catch(e) {
+				if(e.code == 3) {
+				    //index not found
+				    callback.call(this, 'You attempted to select on a column that is not indexed...')
+				}
+			    }
 			}
 		    }
 		}
@@ -191,14 +205,14 @@ jDal.DB = {
 				data[i]._id = jDal._generateGuid();
 				objStore.add(data[i]);
 			    }
-                            e.stopPropogation();
+			    e.stopPropogation();
 			});
 		    }
 		}
 	    } else {
 		var sql = 'INSERT INTO ' + table,
-		    cols = [],
-		    vals = [];
+		cols = [],
+		vals = [];
 		
 		for(var i in data) {
 		    if(data.hasOwnProperty(i)) {
@@ -242,15 +256,22 @@ jDal.DB = {
 		    callback.call(this, e);
 		});
 		
-		testDb.select('testTable', filter, function(results) {
+		this.select(table, filter, function(results) {
+		    if(typeof(results) == 'string') {
+			callback.call(this, results);
+			return;
+		    }
+		    
 		    for(var i in results) {
-			trans.objectStore(table).delete(results[i]._id);
+			if(results.hasOwnProperty(i)) {
+			    trans.objectStore(table)['delete'](results[i]._id);
+			}
 		    }
 		});
 	    } else {
 		var sql = 'DELETE FROM ' + table,
-		    cols = [],
-		    vals = [];
+		cols = [],
+		vals = [];
 		
 		if(filter) {
 		    sql += ' WHERE ';
@@ -268,7 +289,9 @@ jDal.DB = {
 	    return this;
 	}
 	
-	this.isReady = function() {return (this.db !== null);}
+	this.isReady = function() {
+	    return (this.db !== null);
+	}
 	
 	//////////////////////////////////////
 	// PRIVATE UTILITIES
@@ -280,48 +303,53 @@ jDal.DB = {
 		if(this.schema.hasOwnProperty(tbl)) {
 		    var table = this.schema[tbl];
 		    
-                    if(this.type == jDal.DB.types.IndexedDB) {
-                        //if already created, move on
-                        if(this.db.objectStoreNames.contains(tbl))
-                            continue;
+		    if(this.type == jDal.DB.types.IndexedDB) {
+			//if already created, move on
+			if(this.db.objectStoreNames.contains(tbl))
+			    continue;
 
-                        //store table obj, create object store
-                        var objStore = this.db.createObjectStore(tbl, {keyPath: '_id'});
-
-                        //iterate through each column
-                        for(var col in table['columns']) {
-                            if(table['columns'].hasOwnProperty(col)) {
-                                //store column definition
-                                var column = jDal.extend(true, {}, this.defaultColumn, table['columns'][col]);
-
-                                if(column.index)
-                                    objStore.createIndex(col, col, column);
-                            }
-                        }
-                    } else {
-                        var sql = 'CREATE TABLE IF NOT EXISTS ' + tbl + '(_id INTEGER NOT NULL PRIMARY KEY AUTO INCREMENT, ';
+			//store table obj, create object store
+			var objStore = this.db.createObjectStore(tbl, {
+			    keyPath: '_id'
+			});
+			
+			//iterate through each column
+			for(var col in table['columns']) {
+			    if(table['columns'].hasOwnProperty(col)) {
+				//store column definition
+				var column = jDal._extend(true, {}, this.defaultColumn, table['columns'][col]);
+				
+				if(column.index) {
+				    objStore.createIndex(col, col, { unique: column.unique });
+				}
+			    }
+			}
+		    } else {
+			var sql = 'CREATE TABLE IF NOT EXISTS ' + tbl + '(_id INTEGER NOT NULL PRIMARY KEY AUTO INCREMENT, ';
                             
-                        //iterate through each column
-                        for(var col in table['columns']) {
-                                //store column definition
-                                var column = jDal.extend(true, {}, this.defaultColumn, table['columns'][col]);
+			//iterate through each column
+			for(var col in table['columns']) {
+			    //store column definition
+			    var column = jDal.extend(true, {}, this.defaultColumn, table['columns'][col]);
                                 
-                                sql += col + ' ' + column.type + ' ' + (column.required ? 'NOT NULL ' : '') + 
-                                    (column.index ? 'INDEX ' : '') + (column.unique ? 'UNIQUE ' : '') + ');';
+			    sql += col + ' ' + column.type + ' ' + (column.required ? 'NOT NULL ' : '') + 
+			    (column.index ? 'INDEX ' : '') + (column.unique ? 'UNIQUE ' : '') + ');';
                                 
-                                this.db.transaction(function(trans) {
-                                    trans.executeSql(sql, [], function() {console.log('Win-Rar!');}, _onError);
-                                });
-                        }
-                    }
+			    this.db.transaction(function(trans) {
+				trans.executeSql(sql, [], function() {
+				    console.log('Win-Rar!');
+				}, _onError);
+			    });
+			}
+		    }
 		}
 	    }
 	}
 	
 	//global error callback
 	function _onError(e) {
-            if(window.console && console.error)
-                console.error("[JDAL] Database error code: " + e.target.errorCode);
+	    if(window.console && console.error)
+		console.error("[JDAL] Database error code: " + e.target.errorCode);
 	}
     }
 };
