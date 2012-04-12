@@ -303,12 +303,14 @@ jDal.DB = {
 		    var table = this.schema[tbl];
 		    
 		    if(this.type == jDal.DB.types.IndexedDB) {
+			var db = req.result;
+
 			//if already created, move on
-			if(this.db.objectStoreNames.contains(tbl))
+			if(db.objectStoreNames.contains(tbl))
 			    continue;
 
 			//store table obj, create object store
-			var objStore = this.db.createObjectStore(tbl, {
+			var objStore = db.createObjectStore(tbl, {
 			    keyPath: '_id'
 			});
 			
